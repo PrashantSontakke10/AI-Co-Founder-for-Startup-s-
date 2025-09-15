@@ -9,6 +9,9 @@ import { getUserInfo, logout } from '../../utils/auth';
 export default function Dashboard() {
   const [user, setUser] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [events, setEvents] = useState([]);
+  const [refreshing, setRefreshing] = useState(false);
+  const [alerts, setAlerts] = useState([]);
   const router = useRouter();
 
   useEffect(() => {
@@ -17,6 +20,36 @@ export default function Dashboard() {
     if (userInfo) {
       setUser(userInfo);
     }
+    // Trigger background competitor refresh (poor man's cron)
+    const runRefresh = async () => {
+      try {
+        setRefreshing(true);
+        await fetch('/api/competitors/refresh', { method: 'POST' });
+      } catch (e) {
+        // ignore errors silently for UX
+      } finally {
+        setRefreshing(false);
+      }
+    };
+    const loadEvents = async () => {
+      try {
+        const res = await fetch('/api/competitors/events?limit=10');
+        if (res.ok) {
+          const data = await res.json();
+          setEvents(data.events || []);
+        }
+      } catch (e) {}
+    };
+    const loadAlerts = async () => {
+      try {
+        const res = await fetch('/api/alerts/list?limit=10');
+        if (res.ok) {
+          const data = await res.json();
+          setAlerts(data.alerts || []);
+        }
+      } catch (e) {}
+    };
+    runRefresh().then(() => Promise.all([loadEvents(), loadAlerts()]));
   }, []);
 
   const handleLogout = () => {
@@ -121,21 +154,48 @@ export default function Dashboard() {
               </div>
             </Link>
 
-            <div className="bg-white/5 backdrop-blur-sm rounded-xl p-6 border border-white/10 hover:border-purple-400/50 transition-all duration-300 hover-lift">
+            <Link href="/business-planning" className="bg-white/5 backdrop-blur-sm rounded-xl p-6 border border-white/10 hover:border-purple-400/50 transition-all duration-300 hover-lift">
               <div className="text-4xl mb-4">📊</div>
               <h3 className="text-xl font-bold text-white mb-2">Business Planning</h3>
               <p className="text-gray-300 mb-4">Create business models and financial plans</p>
-              <button className="w-full bg-gradient-to-r from-purple-500 to-pink-500 text-white py-2 px-4 rounded-lg hover:from-purple-600 hover:to-pink-600 transition-all duration-300">
+              <div className="w-full bg-gradient-to-r from-purple-500 to-pink-500 text-white py-2 px-4 rounded-lg text-center hover:from-purple-600 hover:to-pink-600 transition-all duration-300">
                 Plan Business
-              </button>
-            </div>
+              </div>
+            </Link>
+
+            <Link href="/technical-cofounder" className="bg-white/5 backdrop-blur-sm rounded-xl p-6 border border-white/10 hover:border-purple-400/50 transition-all duration-300 hover-lift">
+              <div className="text-4xl mb-4">⚡</div>
+              <h3 className="text-xl font-bold text-white mb-2">Technical Co-Founder</h3>
+              <p className="text-gray-300 mb-4">Build MVP and technical architecture</p>
+              <div className="w-full bg-gradient-to-r from-purple-500 to-pink-500 text-white py-2 px-4 rounded-lg text-center hover:from-purple-600 hover:to-pink-600 transition-all duration-300">
+                Start Building
+              </div>
+            </Link>
+
+            <Link href="/fundraising" className="bg-white/5 backdrop-blur-sm rounded-xl p-6 border border-white/10 hover:border-purple-400/50 transition-all duration-300 hover-lift">
+              <div className="text-4xl mb-4">💰</div>
+              <h3 className="text-xl font-bold text-white mb-2">Fundraising</h3>
+              <p className="text-gray-300 mb-4">Perfect your pitch and find investors</p>
+              <div className="w-full bg-gradient-to-r from-purple-500 to-pink-500 text-white py-2 px-4 rounded-lg text-center hover:from-purple-600 hover:to-pink-600 transition-all duration-300">
+                Start Fundraising
+              </div>
+            </Link>
+
+            <Link href="/learning" className="bg-white/5 backdrop-blur-sm rounded-xl p-6 border border-white/10 hover:border-purple-400/50 transition-all duration-300 hover-lift">
+              <div className="text-4xl mb-4">🎓</div>
+              <h3 className="text-xl font-bold text-white mb-2">Learning & Mentorship</h3>
+              <p className="text-gray-300 mb-4">Personalized learning and expert guidance</p>
+              <div className="w-full bg-gradient-to-r from-purple-500 to-pink-500 text-white py-2 px-4 rounded-lg text-center hover:from-purple-600 hover:to-pink-600 transition-all duration-300">
+                Start Learning
+              </div>
+            </Link>
 
             <div className="bg-white/5 backdrop-blur-sm rounded-xl p-6 border border-white/10 hover:border-purple-400/50 transition-all duration-300 hover-lift">
-              <div className="text-4xl mb-4">⚡</div>
-              <h3 className="text-xl font-bold text-white mb-2">Technical Development</h3>
-              <p className="text-gray-300 mb-4">Build MVP and technical architecture</p>
+              <div className="text-4xl mb-4">📈</div>
+              <h3 className="text-xl font-bold text-white mb-2">Market Intelligence</h3>
+              <p className="text-gray-300 mb-4">Real-time competitor tracking and trends</p>
               <button className="w-full bg-gradient-to-r from-purple-500 to-pink-500 text-white py-2 px-4 rounded-lg hover:from-purple-600 hover:to-pink-600 transition-all duration-300">
-                Start Building
+                View Market Data
               </button>
             </div>
           </div>
@@ -209,6 +269,69 @@ export default function Dashboard() {
                 <span className="text-gray-400 text-sm ml-auto">2 min ago</span>
               </div>
             </div>
+          </div>
+
+          {/* Market Watch - Competitor Events */}
+          <div className="mt-8 bg-white/10 backdrop-blur-sm rounded-2xl p-6 border border-white/20">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-2xl font-bold text-white">Market Watch</h2>
+              <button
+                onClick={async () => {
+                  setRefreshing(true);
+                  try {
+                    await fetch('/api/competitors/refresh', { method: 'POST' });
+                    const res = await fetch('/api/competitors/events?limit=10');
+                    if (res.ok) {
+                      const data = await res.json();
+                      setEvents(data.events || []);
+                    }
+                  } finally {
+                    setRefreshing(false);
+                  }
+                }}
+                className="text-sm bg-gradient-to-r from-purple-500 to-pink-500 text-white px-3 py-1 rounded-lg hover:from-purple-600 hover:to-pink-600"
+              >
+                {refreshing ? 'Refreshing…' : 'Refresh now'}
+              </button>
+            </div>
+            {events.length === 0 ? (
+              <p className="text-gray-300">No recent market events yet.</p>
+            ) : (
+              <ul className="divide-y divide-white/10">
+                {events.map((e) => (
+                  <li key={e._id} className="py-3 flex items-start gap-3">
+                    <div className="w-8 h-8 rounded-full bg-purple-500/20 flex items-center justify-center">📰</div>
+                    <div>
+                      <a href={e.url} target="_blank" rel="noreferrer" className="text-white font-semibold hover:text-purple-300">
+                        {e.title}
+                      </a>
+                      <div className="text-xs text-gray-400">{e.source} • {new Date(e.publishedAt).toLocaleString()}</div>
+                      {e.summary && <div className="text-sm text-gray-300 mt-1 line-clamp-2">{e.summary}</div>}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+
+          {/* Alerts */}
+          <div className="mt-8 bg-white/10 backdrop-blur-sm rounded-2xl p-6 border border-white/20">
+            <h2 className="text-2xl font-bold text-white mb-4">Alerts</h2>
+            {alerts.length === 0 ? (
+              <p className="text-gray-300">No alerts yet.</p>
+            ) : (
+              <ul className="divide-y divide-white/10">
+                {alerts.map((a) => (
+                  <li key={a._id} className="py-3 flex items-start gap-3">
+                    <div className="w-8 h-8 rounded-full bg-pink-500/20 flex items-center justify-center">🔔</div>
+                    <div>
+                      <div className="text-white font-semibold">{a.title}</div>
+                      <div className="text-sm text-gray-300">{a.message}</div>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
 
           {/* Back to Home */}
