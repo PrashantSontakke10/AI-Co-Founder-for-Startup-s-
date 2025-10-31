@@ -8,8 +8,6 @@ export default async function handler(req, res) {
   }
 
   try {
-    await connectToDB();
-    
     const { userInput, userId, type = 'ideas' } = req.body;
 
     if (!userInput) {
@@ -19,13 +17,20 @@ export default async function handler(req, res) {
     // Get user context if userId provided
     let userContext = {};
     if (userId) {
-      const user = await User.findById(userId);
-      if (user) {
-        userContext = {
-          role: user.role,
-          startup: user.startup,
-          profile: user.profile
-        };
+      try {
+        // Connect to DB only if we actually need user context
+        await connectToDB();
+        const user = await User.findById(userId);
+        if (user) {
+          userContext = {
+            role: user.role,
+            startup: user.startup,
+            profile: user.profile
+          };
+        }
+      } catch (e) {
+        // Log and continue without DB-derived context
+        console.error('Failed to fetch user context, proceeding without it:', e.message);
       }
     }
 
@@ -33,8 +38,60 @@ export default async function handler(req, res) {
 
     switch (type) {
       case 'ideas':
-        result.ideas = await aiService.generateStartupIdeas(userInput, userContext);
-        result.message = `Generated ${result.ideas.length} startup ideas based on your input about "${userInput}"`;
+        try {
+          result.ideas = await aiService.generateStartupIdeas(userInput, userContext);
+          result.message = `Generated ${result.ideas.length} startup ideas based on your input about "${userInput}"`;
+        } catch (e) {
+          console.error('AI generation failed, returning fallback ideas:', e.message);
+          result.ideas = [
+            {
+              id: Date.now() + 1,
+              title: `Idea exploring: ${userInput}`,
+              description: 'A practical concept derived from your topic, focusing on a clear problem-solution fit.',
+              problem: 'Users face inefficiencies or gaps related to this topic',
+              solution: 'Deliver a simple, high-value tool that addresses the key pain point',
+              targetAudience: 'Early adopters within the niche audience',
+              revenueModel: 'Subscription with free trial',
+              marketSize: 'Niche market with expansion potential',
+              growthRate: 'Medium',
+              category: 'Software',
+              differentiators: ['Ease of use', 'Speed to value'],
+              feasibility: 'High',
+              investmentNeeded: 'Low to medium'
+            },
+            {
+              id: Date.now() + 2,
+              title: `Assistant for ${userInput}`,
+              description: 'Guided assistant that streamlines repetitive tasks and decisions.',
+              problem: 'Time-consuming manual workflows',
+              solution: 'Automation-first assistant with helpful templates',
+              targetAudience: 'Professionals and teams',
+              revenueModel: 'Tiered SaaS',
+              marketSize: 'Growing productivity market',
+              growthRate: 'High',
+              category: 'Productivity',
+              differentiators: ['Opinionated defaults', 'Integrations'],
+              feasibility: 'High',
+              investmentNeeded: 'Low'
+            },
+            {
+              id: Date.now() + 3,
+              title: `${userInput} insights dashboard`,
+              description: 'Aggregates and surfaces actionable insights with minimal setup.',
+              problem: 'Scattered data and lack of visibility',
+              solution: 'Unified dashboard with alerts and reports',
+              targetAudience: 'Operators and managers',
+              revenueModel: 'Per-seat licensing',
+              marketSize: 'Horizontal tooling market',
+              growthRate: 'Medium',
+              category: 'Analytics',
+              differentiators: ['Fast onboarding', 'Actionable metrics'],
+              feasibility: 'Medium',
+              investmentNeeded: 'Medium'
+            }
+          ];
+          result.message = `Showing fallback ideas for "${userInput}" (AI unavailable).`;
+        }
         break;
       
       case 'business-plan':
